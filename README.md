@@ -18,12 +18,12 @@ A single-file DNS propagation monitor with CAA validation. Open `pingeling.html`
 1. Open `pingeling.html` in a browser — no server, no install
 2. Enter a domain and optional expected value (IP address or CNAME target)
 3. Select record type (A, AAAA, CNAME, MX, TXT)
-4. Click **+ Legg til**
+4. Click **+ Add**
 5. Pingeling polls automatically and alerts you when DNS propagates on both resolvers
 
 ## Export / Import
 
-Click **⬇ Eksport** to download your current domain list as a `.json` file. Click **⬆ Import** to load it back. The format is simple and human-editable:
+Click **⬇ Export** to download your current domain list as a `.json` file. Click **⬆ Import** to load it back. The format is simple and human-editable:
 
 ```json
 {
@@ -62,8 +62,11 @@ MIT
 
 ## Changelog
 
+### v1.7
+- Full English translation — all UI text, log messages, and status strings
+
 ### v1.6
-- TTL wait indicator per domain — shows "Etter endring: vent opptil X" based on current TTL
+- TTL wait indicator per domain — shows how long to wait after a DNS change based on current TTL
 - Color-coded: red (>30 min), yellow (5–30 min), grey (<5 min)
 - Helps plan when to expect propagation after a DNS change
 

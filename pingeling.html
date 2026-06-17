@@ -4,7 +4,7 @@
   MIT License — see README.md
 -->
 <!DOCTYPE html>
-<html lang="no">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -128,16 +128,16 @@
   </svg>
   <div>
     <h1>Ping<span>eling</span></h1>
-    <p class="subtitle" style="margin-bottom:0">DNS-propagering og CAA-sjekk — Cloudflare &amp; Google</p>
+    <p class="subtitle" style="margin-bottom:0">DNS propagation monitor with CAA validation — Cloudflare &amp; Google</p>
   </div>
 </div>
 <div style="margin-bottom:24px"></div>
 
 <div class="card">
-  <div class="section-title">Legg til domene</div>
+  <div class="section-title">Add domain</div>
   <div class="form-row">
-    <input class="domain" id="inp-domain" type="text" placeholder="eksempel.no" autocomplete="off" spellcheck="false">
-    <input class="ip" id="inp-ip" type="text" placeholder="Forventet verdi (valgfritt)" autocomplete="off" spellcheck="false">
+    <input class="domain" id="inp-domain" type="text" placeholder="example.com" autocomplete="off" spellcheck="false">
+    <input class="ip" id="inp-ip" type="text" placeholder="Expected value (optional)" autocomplete="off" spellcheck="false">
     <select class="type-sel" id="inp-type">
       <option value="A">A</option>
       <option value="AAAA">AAAA</option>
@@ -145,24 +145,24 @@
       <option value="MX">MX</option>
       <option value="TXT">TXT</option>
     </select>
-    <button class="btn btn-primary" onclick="addMonitor()">+ Legg til</button>
+    <button class="btn btn-primary" onclick="addMonitor()">+ Add</button>
   </div>
   <div class="interval-row">
-    <span>Sjekk hvert</span>
+    <span>Check every</span>
     <select id="sel-interval" style="width:90px">
-      <option value="5">5 sek</option>
-      <option value="10">10 sek</option>
-      <option value="30" selected>30 sek</option>
+      <option value="5">5 sec</option>
+      <option value="10">10 sec</option>
+      <option value="30" selected>30 sec</option>
       <option value="60">1 min</option>
       <option value="120">2 min</option>
       <option value="300">5 min</option>
     </select>
     <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
-      <button class="btn btn-ghost btn-sm" onclick="exportMonitors()" title="Eksporter til JSON-fil">⬇ Eksport</button>
-      <label class="btn btn-ghost btn-sm" style="cursor:pointer" title="Importer fra JSON-fil">⬆ Import<input type="file" accept=".json" style="display:none" onchange="importMonitors(event)"></label>
-      <button class="btn btn-ghost btn-sm" onclick="toggleNotifications()" id="btn-notif" title="Skru på desktop-varsler">🔔 Varsler</button>
+      <button class="btn btn-ghost btn-sm" onclick="exportMonitors()" title="Export to JSON file">⬇ Export</button>
+      <label class="btn btn-ghost btn-sm" style="cursor:pointer" title="Import from JSON file">⬆ Import<input type="file" accept=".json" style="display:none" onchange="importMonitors(event)"></label>
+      <button class="btn btn-ghost btn-sm" onclick="toggleNotifications()" id="btn-notif" title="Enable desktop notifications">🔔 Alerts</button>
       <button class="btn btn-ghost btn-sm" onclick="pauseAll()" id="btn-pause">⏸ Pause</button>
-      <button class="btn btn-ghost btn-sm" onclick="clearAll()">🗑 Fjern alle</button>
+      <button class="btn btn-ghost btn-sm" onclick="clearAll()">🗑 Clear all</button>
     </div>
   </div>
   <div class="progress-bar-wrap" id="progress-wrap" style="display:none">
@@ -173,13 +173,13 @@
 <div id="notif-banner" class="notif-banner"></div>
 
 <div class="card">
-  <div class="section-title">Overvåkede domener</div>
-  <div id="monitors"><div class="empty-state">Ingen domener lagt til ennå.</div></div>
+  <div class="section-title">Monitored domains</div>
+  <div id="monitors"><div class="empty-state">No domains added yet.</div></div>
 </div>
 
 <div class="card">
-  <div class="section-title">Logg</div>
-  <div class="log" id="log"><div class="log-entry"><span class="info">Klar — legg til et domene for å starte.</span></div></div>
+  <div class="section-title">Log</div>
+  <div class="log" id="log"><div class="log-entry"><span class="info">Ready — add a domain to start.</span></div></div>
 </div>
 
 <script>
@@ -217,21 +217,21 @@ async function checkHTTP(domain) {
     // HTTPS failed — try HTTP to distinguish SSL issues
     try {
       await tryFetch(`http://${domain}`, 5000);
-      return { ok: false, proto: 'HTTP', note: 'ssl-feil' };
+      return { ok: false, proto: 'HTTP', note: 'ssl-error' };
     } catch(e2) {
-      return { ok: false, proto: null, note: e2.name === 'AbortError' ? 'timeout' : 'ingen respons' };
+      return { ok: false, proto: null, note: e2.name === 'AbortError' ? 'timeout' : 'no-response' };
     }
   }
 }
 
-// CAA: hent rotdomene (f.eks. sub.example.no → example.no)
+// CAA: get root domain (e.g. sub.example.com → example.com)
 function rootDomain(domain) {
   const parts = domain.split('.');
   return parts.length > 2 ? parts.slice(-2).join('.') : domain;
 }
 
 async function lookupCAA(domain) {
-  // Sjekk eksakt domene, deretter rotdomene
+  // Check exact domain, then root domain
   const targets = [domain];
   const root = rootDomain(domain);
   if (root !== domain) targets.push(root);
@@ -250,17 +250,17 @@ async function lookupCAA(domain) {
   return { records: [], checkedAt: domain };
 }
 
-// Azure App Service bruker DigiCert. Sjekk også Let's Encrypt for info.
+// Azure App Service uses DigiCert for managed certificates
 const AZURE_CAS = ['digicert.com'];
 
 function caaAzureStatus(records) {
-  if (!records || records.length === 0) return { status: 'open', label: 'Ingen CAA-record — alle CA-er tillatt' };
+  if (!records || records.length === 0) return { status: 'open', label: 'No CAA record — all CAs allowed' };
   const issueRecords = records.filter(r => /\bissue\b|\bissuewild\b/i.test(r));
-  if (issueRecords.length === 0) return { status: 'open', label: 'Ingen issue-regler funnet' };
+  if (issueRecords.length === 0) return { status: 'open', label: 'No issue rules found' };
   const hasDigiCert = issueRecords.some(r => r.toLowerCase().includes('digicert.com'));
   const summary = issueRecords.map(r => r.replace(/^0\s+issue\w*\s+/i, '').replace(/"/g, '')).join(', ');
-  if (hasDigiCert) return { status: 'ok', label: '✓ DigiCert tillatt — Azure kan utstede sertifikat', records: summary };
-  return { status: 'error', label: '✗ DigiCert IKKE tillatt — Azure kan IKKE utstede sertifikat!', records: summary };
+  if (hasDigiCert) return { status: 'ok', label: '✓ DigiCert allowed — Azure can issue certificate', records: summary };
+  return { status: 'error', label: '✗ DigiCert NOT allowed — Azure cannot issue certificate!', records: summary };
 }
 
 // ── Persistence ───────────────────────────────────────────────
@@ -302,7 +302,7 @@ function addMonitor(domain, expected, type, silent, done, propagatedAt) {
   });
   saveToStorage();
   renderMonitors();
-  if (!silent) log('info', `Lagt til: ${domain} (${type})${expected ? ' → forventer ' + expected : ''}`);
+  if (!silent) log('info', `Added: ${domain} (${type})${expected ? ' → expecting ' + expected : ''}`);
   if (!timer && !paused) startPolling();
 }
 
@@ -338,7 +338,7 @@ function overallDotClass(m) {
 function ttlLabel(ttl) {
   if (ttl === null) return '';
   const cls = ttl < 60 ? ' low' : '';
-  const label = ttl >= 3600 ? `${Math.round(ttl/3600)}t` : ttl >= 60 ? `${Math.round(ttl/60)}m` : `${ttl}s`;
+  const label = ttl >= 3600 ? `${Math.round(ttl/3600)}h` : ttl >= 60 ? `${Math.round(ttl/60)}m` : `${ttl}s`;
   return `<span class="ttl-badge${cls}">TTL ${label}</span>`;
 }
 
@@ -346,18 +346,18 @@ function ttlWaitLabel(m) {
   const ttls = [m.cf.ttl, m.google.ttl].filter(t => t !== null && t > 0);
   if (ttls.length === 0) return '';
   const maxTTL = Math.max(...ttls);
-  const label = maxTTL >= 3600 ? `${Math.round(maxTTL/3600)} time${Math.round(maxTTL/3600) > 1 ? 'r' : ''}` :
+  const label = maxTTL >= 3600 ? `${Math.round(maxTTL/3600)}h` :
                 maxTTL >= 60   ? `${Math.round(maxTTL/60)} min` :
-                `${maxTTL} sek`;
+                `${maxTTL}s`;
   const cls = maxTTL > 1800 ? 'color:#ef4444' : maxTTL > 300 ? 'color:#f59e0b' : 'color:#64748b';
-  return `<span title="Høyeste TTL på tvers av resolvers" style="${cls}">⏱ Etter endring: vent opptil ${label}</span>`;
+  return `<span title="Highest TTL across resolvers" style="${cls}">⏱ After change: wait up to ${label}</span>`;
 }
 
 function resolverRow(r, expected, label) {
   const matched = isMatch(r, expected);
   const cls = r.status === 'pending' ? 'pending' : (r.value ? (expected ? (matched ? 'match' : 'mismatch') : '') : 'pending');
   const rowCls = r.value && expected ? (matched ? 'match' : 'mismatch') : '';
-  const display = r.status === 'checking' ? '...' : (r.value || (r.status === 'error' ? '⚠ feil' : '—'));
+  const display = r.status === 'checking' ? '...' : (r.value || (r.status === 'error' ? '⚠ error' : '—'));
   return `<div class="resolver-row ${rowCls}">
     <span class="resolver-label">${label}</span>
     <span class="resolver-value ${cls}" title="${r.value || ''}">${display}</span>
@@ -368,21 +368,21 @@ function resolverRow(r, expected, label) {
 function renderHTTPRow(m) {
   if (!['A', 'CNAME'].includes(m.type)) return '';
   const h = m.http;
-  if (h.status === 'pending')   return `<div class="http-row"><span class="http-label">HTTP</span><span class="http-status muted">Venter...</span></div>`;
-  if (h.status === 'checking')  return `<div class="http-row"><span class="http-label">HTTP</span><span class="http-status muted">Sjekker...</span></div>`;
-  if (h.ok) return `<div class="http-row ok"><span class="http-label">HTTP</span><span class="http-status ok">✓ HTTPS svarer</span></div>`;
-  if (h.note === 'ssl-feil')    return `<div class="http-row warn"><span class="http-label">HTTP</span><span class="http-status warn">⚠ SSL-feil — HTTP svarer, men ikke HTTPS</span></div>`;
-  if (h.note === 'timeout')     return `<div class="http-row warn"><span class="http-label">HTTP</span><span class="http-status warn">⏱ Timeout</span></div>`;
-  return `<div class="http-row fail"><span class="http-label">HTTP</span><span class="http-status fail">✗ Ingen respons</span></div>`;
+  if (h.status === 'pending')      return `<div class="http-row"><span class="http-label">HTTP</span><span class="http-status muted">Waiting...</span></div>`;
+  if (h.status === 'checking')     return `<div class="http-row"><span class="http-label">HTTP</span><span class="http-status muted">Checking...</span></div>`;
+  if (h.ok)                        return `<div class="http-row ok"><span class="http-label">HTTP</span><span class="http-status ok">✓ HTTPS responding</span></div>`;
+  if (h.note === 'ssl-error')      return `<div class="http-row warn"><span class="http-label">HTTP</span><span class="http-status warn">⚠ SSL error — HTTP responds but not HTTPS</span></div>`;
+  if (h.note === 'timeout')        return `<div class="http-row warn"><span class="http-label">HTTP</span><span class="http-status warn">⏱ Timeout</span></div>`;
+  return `<div class="http-row fail"><span class="http-label">HTTP</span><span class="http-status fail">✗ No response</span></div>`;
 }
 
 function renderCAARow(m) {
   const c = m.caa;
-  if (c.status === 'pending') return `<div class="caa-row"><span class="caa-label">CAA</span><span class="caa-status muted">Venter...</span></div>`;
-  if (c.status === 'checking') return `<div class="caa-row"><span class="caa-label">CAA</span><span class="caa-status muted">Sjekker...</span></div>`;
-  if (c.status === 'error') return `<div class="caa-row error"><span class="caa-label">CAA</span><span class="caa-status error">Feil ved oppslag</span></div>`;
+  if (c.status === 'pending')  return `<div class="caa-row"><span class="caa-label">CAA</span><span class="caa-status muted">Waiting...</span></div>`;
+  if (c.status === 'checking') return `<div class="caa-row"><span class="caa-label">CAA</span><span class="caa-status muted">Checking...</span></div>`;
+  if (c.status === 'error')    return `<div class="caa-row error"><span class="caa-label">CAA</span><span class="caa-status error">Lookup error</span></div>`;
   const s = caaAzureStatus(c.records);
-  const checkedNote = c.checkedAt ? ` <span style="color:#334155;font-size:0.7rem;">(sjekket på ${c.checkedAt})</span>` : '';
+  const checkedNote = c.checkedAt ? ` <span style="color:#334155;font-size:0.7rem;">(checked on ${c.checkedAt})</span>` : '';
   return `<div class="caa-row ${s.status === 'open' ? '' : s.status}">
     <span class="caa-label">CAA</span>
     <span class="caa-status ${s.status === 'open' ? 'muted' : s.status}">${s.label}${checkedNote}</span>
@@ -392,15 +392,15 @@ function renderCAARow(m) {
 
 function renderMonitors() {
   const el = document.getElementById('monitors');
-  if (monitors.length === 0) { el.innerHTML = '<div class="empty-state">Ingen domener lagt til ennå.</div>'; return; }
+  if (monitors.length === 0) { el.innerHTML = '<div class="empty-state">No domains added yet.</div>'; return; }
 
   monitors.forEach(m => {
     let item = el.querySelector(`[data-id="${m.id}"]`);
     if (!item) { item = document.createElement('div'); item.dataset.id = m.id; el.appendChild(item); }
 
     const dot = overallDotClass(m);
-    const propagatedStr = m.propagatedAt ? new Date(m.propagatedAt).toLocaleTimeString('no') : null;
-    const lastStr = m.lastChecked ? new Date(m.lastChecked).toLocaleTimeString('no') : null;
+    const propagatedStr = m.propagatedAt ? new Date(m.propagatedAt).toLocaleTimeString() : null;
+    const lastStr = m.lastChecked ? new Date(m.lastChecked).toLocaleTimeString() : null;
 
     item.className = `monitor-item${m.done ? ' done' : ''}`;
     item.innerHTML = `
@@ -409,16 +409,16 @@ function renderMonitors() {
         <div class="monitor-domain-line">
           <div class="monitor-domain">
             ${m.domain}<span class="record-badge">${m.type}</span>
-            ${m.done && propagatedStr ? `<span class="badge-propagated">✓ Propagert ${propagatedStr}</span>` : ''}
+            ${m.done && propagatedStr ? `<span class="badge-propagated">✓ Propagated ${propagatedStr}</span>` : ''}
           </div>
           <div class="monitor-meta">
-            ${m.expected ? `<span>Forventer: <b style="color:#94a3b8">${m.expected}</b></span>` : '<span>Overvåker endringer</span>'}
-            ${m.checkCount > 0 ? `<span>Sjekket ${m.checkCount}×</span>` : ''}
-            ${lastStr ? `<span>Sist: ${lastStr}</span>` : ''}
+            ${m.expected ? `<span>Expects: <b style="color:#94a3b8">${m.expected}</b></span>` : '<span>Monitoring changes</span>'}
+            ${m.checkCount > 0 ? `<span>Checked ${m.checkCount}×</span>` : ''}
+            ${lastStr ? `<span>Last: ${lastStr}</span>` : ''}
             ${ttlWaitLabel(m)}
           </div>
         </div>
-        <button class="remove-btn" onclick="removeMonitor(${m.id})" title="Fjern">✕</button>
+        <button class="remove-btn" onclick="removeMonitor(${m.id})" title="Remove">✕</button>
       </div>
       <div class="resolver-grid">
         ${resolverRow(m.cf,     m.expected, '☁ Cloudflare')}
@@ -446,8 +446,8 @@ async function checkAll() {
         return checkHTTP(m.domain).then(r => {
           m.http.ok = r.ok; m.http.proto = r.proto; m.http.note = r.note;
           m.http.status = 'done'; m.http.lastChecked = Date.now();
-          if (r.note === 'ssl-feil') log('warn', `HTTP ⚠ ${m.domain}: SSL-feil`);
-        }).catch(() => { m.http.status = 'done'; m.http.note = 'ingen respons'; });
+          if (r.note === 'ssl-error') log('warn', `HTTP ⚠ ${m.domain}: SSL error`);
+        }).catch(() => { m.http.status = 'done'; m.http.note = 'no-response'; });
       })
   );
   renderMonitors();
@@ -456,7 +456,7 @@ async function checkAll() {
     if (m.done) continue;
     m.cf.status = 'checking';
     m.google.status = 'checking';
-    // CAA: sjekk første gang, eller re-sjekk hvert 5. minutt
+    // CAA: check on first poll, then re-check every 5 minutes
     const caaStale = !m.caa.lastChecked || (Date.now() - m.caa.lastChecked > 5 * 60 * 1000);
     if (caaStale) m.caa.status = 'checking';
     renderMonitors();
@@ -484,8 +484,8 @@ async function checkAll() {
           m.caa.lastChecked = Date.now();
           const s = caaAzureStatus(r.records);
           if (s.status === 'error') log('warn', `CAA ⚠ ${m.domain}: ${s.label}`);
-          else if (s.status === 'ok') log('ok', `CAA ✓ ${m.domain}: DigiCert tillatt`);
-          else log('info', `CAA ${m.domain}: ingen regler satt`);
+          else if (s.status === 'ok') log('ok', `CAA ✓ ${m.domain}: DigiCert allowed`);
+          else log('info', `CAA ${m.domain}: no rules set`);
         }).catch(e => { m.caa.status = 'error'; m.caa.lastChecked = Date.now(); })
       );
     }
@@ -500,8 +500,8 @@ async function checkAll() {
           m.http.note   = r.note;
           m.http.status = 'done';
           m.http.lastChecked = Date.now();
-          if (r.note === 'ssl-feil') log('warn', `HTTP ⚠ ${m.domain}: SSL-feil — HTTP svarer, HTTPS ikke`);
-        }).catch(() => { m.http.status = 'done'; m.http.note = 'ingen respons'; })
+          if (r.note === 'ssl-error') log('warn', `HTTP ⚠ ${m.domain}: SSL error — HTTP responds, HTTPS does not`);
+        }).catch(() => { m.http.status = 'done'; m.http.note = 'no-response'; })
       );
     }
 
@@ -517,7 +517,7 @@ async function checkAll() {
       const cfStr = `CF:${m.cf.value}${m.cf.ttl !== null ? ` TTL:${m.cf.ttl}s` : ''}`;
       const gStr  = `Google:${m.google.value}${m.google.ttl !== null ? ` TTL:${m.google.ttl}s` : ''}`;
       log(cfM && gM ? 'ok' : (cfM || gM ? 'warn' : 'fail'),
-        `${m.domain} — ${cfStr} | ${gStr}${cfM && gM ? ' ✓ begge match' : cfM ? ' ~ CF match' : gM ? ' ~ Google match' : ''}`);
+        `${m.domain} — ${cfStr} | ${gStr}${cfM && gM ? ' ✓ both match' : cfM ? ' ~ CF match' : gM ? ' ~ Google match' : ''}`);
     } else {
       log('info', `${m.domain} — CF:${m.cf.value||'—'} | Google:${m.google.value||'—'}`);
     }
@@ -562,22 +562,22 @@ function startProgressBar(intervalMs) {
 
 function pauseAll() {
   paused = !paused;
-  document.getElementById('btn-pause').textContent = paused ? '▶ Fortsett' : '⏸ Pause';
-  log('info', paused ? 'Polling pauset.' : 'Polling gjenopptatt.');
+  document.getElementById('btn-pause').textContent = paused ? '▶ Resume' : '⏸ Pause';
+  log('info', paused ? 'Polling paused.' : 'Polling resumed.');
 }
 
 function clearAll() {
   monitors.length = 0; stopPolling(); saveToStorage(); renderMonitors();
-  log('info', 'Alle domener fjernet.');
+  log('info', 'All domains removed.');
 }
 
 // ── Notify ────────────────────────────────────────────────────
 function notify(domain, ip) {
   const banner = document.getElementById('notif-banner');
   banner.style.display = 'block';
-  banner.textContent = `✅ ${domain} peker nå på ${ip} — DNS er propagert på begge resolvers!`;
+  banner.textContent = `✅ ${domain} now points to ${ip} — DNS propagated on both resolvers!`;
   if (Notification.permission === 'granted') {
-    new Notification('DNS propagert!', { body: `${domain} → ${ip}` });
+    new Notification('DNS propagated!', { body: `${domain} → ${ip}` });
   }
   try {
     const ctx = new AudioContext();
@@ -599,7 +599,7 @@ function log(type, msg) {
   const logEl = document.getElementById('log');
   const entry = document.createElement('div');
   entry.className = 'log-entry';
-  entry.innerHTML = `<span class="t">[${new Date().toLocaleTimeString('no')}]</span> <span class="${type}">${msg}</span>`;
+  entry.innerHTML = `<span class="t">[${new Date().toLocaleTimeString()}]</span> <span class="${type}">${msg}</span>`;
   logEl.appendChild(entry);
   logEl.scrollTop = logEl.scrollHeight;
   while (logEl.children.length > 300) logEl.removeChild(logEl.firstChild);
@@ -608,7 +608,7 @@ function log(type, msg) {
 // ── Export / Import ───────────────────────────────────────────
 function exportMonitors() {
   const data = monitors.map(m => ({ domain: m.domain, expected: m.expected, type: m.type }));
-  if (data.length === 0) { log('warn', 'Ingen domener å eksportere.'); return; }
+  if (data.length === 0) { log('warn', 'No domains to export.'); return; }
   const json = JSON.stringify({ pingeling: true, version: 1, exported: new Date().toISOString(), monitors: data }, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
   const a = document.createElement('a');
@@ -616,7 +616,7 @@ function exportMonitors() {
   a.download = `pingeling-${new Date().toISOString().slice(0,10)}.json`;
   a.click();
   URL.revokeObjectURL(a.href);
-  log('ok', `Eksporterte ${data.length} domene(r) til JSON.`);
+  log('ok', `Exported ${data.length} domain(s) to JSON.`);
 }
 
 function importMonitors(event) {
@@ -627,13 +627,13 @@ function importMonitors(event) {
     try {
       const parsed = JSON.parse(e.target.result);
       const list = parsed.monitors || (Array.isArray(parsed) ? parsed : null);
-      if (!list) throw new Error('Ugyldig format');
+      if (!list) throw new Error('Invalid format');
       let added = 0, reset = 0, skipped = 0;
       list.forEach(d => {
         if (!d.domain) { skipped++; return; }
         const exists = monitors.find(m => m.domain === d.domain && m.type === (d.type || 'A'));
         if (exists) {
-          // Tilbakestill done-status så den overvåkes aktivt igjen
+          // Reset done status so it's actively monitored again
           exists.done = false;
           exists.propagatedAt = null;
           exists.cf.status = 'pending';
@@ -649,13 +649,13 @@ function importMonitors(event) {
       saveToStorage();
       renderMonitors();
       const parts = [];
-      if (added > 0) parts.push(`${added} lagt til`);
-      if (reset > 0) parts.push(`${reset} tilbakestilt`);
-      if (skipped > 0) parts.push(`${skipped} hoppet over`);
+      if (added > 0) parts.push(`${added} added`);
+      if (reset > 0) parts.push(`${reset} reset`);
+      if (skipped > 0) parts.push(`${skipped} skipped`);
       log('ok', `Import: ${parts.join(', ')}.`);
       if (!timer && monitors.length > 0 && !paused) startPolling();
     } catch(err) {
-      log('fail', `Import feilet: ${err.message}`);
+      log('fail', `Import failed: ${err.message}`);
     }
     event.target.value = '';
   };
@@ -665,15 +665,15 @@ function importMonitors(event) {
 // ── Notifications ─────────────────────────────────────────────
 function toggleNotifications() {
   if (Notification.permission === 'granted') {
-    log('info', 'Desktop-varsler er allerede aktivert.');
+    log('info', 'Desktop notifications are already enabled.');
     return;
   }
   Notification.requestPermission().then(p => {
     if (p === 'granted') {
       updateNotifButton();
-      log('ok', 'Desktop-varsler aktivert!');
+      log('ok', 'Desktop notifications enabled!');
     } else {
-      log('warn', 'Varsler ble ikke tillatt.');
+      log('warn', 'Notifications not allowed.');
     }
   });
 }
@@ -682,10 +682,10 @@ function updateNotifButton() {
   const btn = document.getElementById('btn-notif');
   if (!btn) return;
   if (Notification.permission === 'granted') {
-    btn.textContent = '🔔 Varsler på';
+    btn.textContent = '🔔 Alerts on';
     btn.style.color = '#22c55e';
   } else {
-    btn.textContent = '🔔 Varsler';
+    btn.textContent = '🔔 Alerts';
     btn.style.color = '';
   }
 }
