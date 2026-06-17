@@ -62,6 +62,11 @@ MIT
 
 ## Changelog
 
+### v1.5
+- HTTP/HTTPS reachability check for A and CNAME records
+- Detects SSL errors (HTTPS fails but HTTP responds) — common Azure issue
+- Runs on every poll, even after DNS has propagated
+
 ### v1.4
 - Export domain list to JSON file
 - Import JSON file to quickly populate monitors (duplicates skipped)

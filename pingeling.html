@@ -71,6 +71,18 @@
   .caa-status.muted { color: #475569; }
   .caa-records { font-family: monospace; font-size: 0.75rem; color: #64748b; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+  /* HTTP status */
+  .http-row { margin-top: 6px; background: #1a1f2e; border: 1px solid #252d3d; border-radius: 7px; padding: 8px 12px; display: flex; align-items: center; gap: 10px; font-size: 0.78rem; }
+  .http-row.ok   { border-color: #22c55e33; }
+  .http-row.warn { border-color: #f59e0b44; }
+  .http-row.fail { border-color: #ef444433; }
+  .http-label  { font-weight: 600; color: #475569; font-size: 0.72rem; width: 36px; flex-shrink: 0; }
+  .http-status { flex: 1; min-width: 0; }
+  .http-status.ok   { color: #22c55e; }
+  .http-status.warn { color: #f59e0b; }
+  .http-status.fail { color: #ef4444; }
+  .http-status.muted { color: #475569; }
+
   .progress-bar-wrap { height: 3px; background: #2d3448; border-radius: 99px; margin-top: 8px; overflow: hidden; }
   .progress-bar { height: 100%; background: #4f6ef7; border-radius: 99px; }
   .notif-banner { background: #0a1f12; border: 1px solid #22c55e44; border-radius: 8px; padding: 10px 14px; color: #22c55e; font-size: 0.85rem; margin-bottom: 12px; display: none; }
@@ -184,6 +196,29 @@ async function lookupDNS(domain, type, provider) {
   return { value: data.Answer.map(a => a.data).join(', '), ttl };
 }
 
+// ── HTTP check ────────────────────────────────────────────────
+async function checkHTTP(domain) {
+  const tryFetch = (url, ms) => {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), ms);
+    return fetch(url, { mode: 'no-cors', signal: ctrl.signal })
+      .finally(() => clearTimeout(t));
+  };
+  try {
+    await tryFetch(`https://${domain}`, 7000);
+    return { ok: true, proto: 'HTTPS', note: null };
+  } catch(e) {
+    if (e.name === 'AbortError') return { ok: false, proto: 'HTTPS', note: 'timeout' };
+    // HTTPS failed — try HTTP to distinguish SSL issues
+    try {
+      await tryFetch(`http://${domain}`, 5000);
+      return { ok: false, proto: 'HTTP', note: 'ssl-feil' };
+    } catch(e2) {
+      return { ok: false, proto: null, note: e2.name === 'AbortError' ? 'timeout' : 'ingen respons' };
+    }
+  }
+}
+
 // CAA: hent rotdomene (f.eks. sub.example.no → example.no)
 function rootDomain(domain) {
   const parts = domain.split('.');
@@ -254,6 +289,7 @@ function addMonitor(domain, expected, type, silent, done, propagatedAt) {
     cf:     { value: null, ttl: null, status: 'pending' },
     google: { value: null, ttl: null, status: 'pending' },
     caa:    { records: null, status: 'pending', checkedAt: null },
+    http:   { status: 'pending', proto: null, note: null, lastChecked: null },
     lastChecked: null,
     done: done || false,
     propagatedAt: propagatedAt || null,
@@ -313,6 +349,17 @@ function resolverRow(r, expected, label) {
   </div>`;
 }
 
+function renderHTTPRow(m) {
+  if (!['A', 'CNAME'].includes(m.type)) return '';
+  const h = m.http;
+  if (h.status === 'pending')   return `<div class="http-row"><span class="http-label">HTTP</span><span class="http-status muted">Venter...</span></div>`;
+  if (h.status === 'checking')  return `<div class="http-row"><span class="http-label">HTTP</span><span class="http-status muted">Sjekker...</span></div>`;
+  if (h.ok) return `<div class="http-row ok"><span class="http-label">HTTP</span><span class="http-status ok">✓ HTTPS svarer</span></div>`;
+  if (h.note === 'ssl-feil')    return `<div class="http-row warn"><span class="http-label">HTTP</span><span class="http-status warn">⚠ SSL-feil — HTTP svarer, men ikke HTTPS</span></div>`;
+  if (h.note === 'timeout')     return `<div class="http-row warn"><span class="http-label">HTTP</span><span class="http-status warn">⏱ Timeout</span></div>`;
+  return `<div class="http-row fail"><span class="http-label">HTTP</span><span class="http-status fail">✗ Ingen respons</span></div>`;
+}
+
 function renderCAARow(m) {
   const c = m.caa;
   if (c.status === 'pending') return `<div class="caa-row"><span class="caa-label">CAA</span><span class="caa-status muted">Venter...</span></div>`;
@@ -361,6 +408,7 @@ function renderMonitors() {
         ${resolverRow(m.google, m.expected, '🔍 Google')}
       </div>
       ${renderCAARow(m)}
+      ${renderHTTPRow(m)}
     `;
   });
 
@@ -372,6 +420,21 @@ function renderMonitors() {
 
 // ── Polling ───────────────────────────────────────────────────
 async function checkAll() {
+  // HTTP checks for done monitors (DNS done ≠ site up)
+  await Promise.all(
+    monitors
+      .filter(m => m.done && ['A', 'CNAME'].includes(m.type))
+      .map(m => {
+        m.http.status = 'checking';
+        return checkHTTP(m.domain).then(r => {
+          m.http.ok = r.ok; m.http.proto = r.proto; m.http.note = r.note;
+          m.http.status = 'done'; m.http.lastChecked = Date.now();
+          if (r.note === 'ssl-feil') log('warn', `HTTP ⚠ ${m.domain}: SSL-feil`);
+        }).catch(() => { m.http.status = 'done'; m.http.note = 'ingen respons'; });
+      })
+  );
+  renderMonitors();
+
   for (const m of monitors) {
     if (m.done) continue;
     m.cf.status = 'checking';
@@ -407,6 +470,21 @@ async function checkAll() {
           else if (s.status === 'ok') log('ok', `CAA ✓ ${m.domain}: DigiCert tillatt`);
           else log('info', `CAA ${m.domain}: ingen regler satt`);
         }).catch(e => { m.caa.status = 'error'; m.caa.lastChecked = Date.now(); })
+      );
+    }
+
+    // HTTP check for A/CNAME — runs regardless of done state
+    if (['A', 'CNAME'].includes(m.type)) {
+      m.http.status = 'checking';
+      jobs.push(
+        checkHTTP(m.domain).then(r => {
+          m.http.ok     = r.ok;
+          m.http.proto  = r.proto;
+          m.http.note   = r.note;
+          m.http.status = 'done';
+          m.http.lastChecked = Date.now();
+          if (r.note === 'ssl-feil') log('warn', `HTTP ⚠ ${m.domain}: SSL-feil — HTTP svarer, HTTPS ikke`);
+        }).catch(() => { m.http.status = 'done'; m.http.note = 'ingen respons'; })
       );
     }
 
