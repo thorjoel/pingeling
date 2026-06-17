@@ -342,6 +342,17 @@ function ttlLabel(ttl) {
   return `<span class="ttl-badge${cls}">TTL ${label}</span>`;
 }
 
+function ttlWaitLabel(m) {
+  const ttls = [m.cf.ttl, m.google.ttl].filter(t => t !== null && t > 0);
+  if (ttls.length === 0) return '';
+  const maxTTL = Math.max(...ttls);
+  const label = maxTTL >= 3600 ? `${Math.round(maxTTL/3600)} time${Math.round(maxTTL/3600) > 1 ? 'r' : ''}` :
+                maxTTL >= 60   ? `${Math.round(maxTTL/60)} min` :
+                `${maxTTL} sek`;
+  const cls = maxTTL > 1800 ? 'color:#ef4444' : maxTTL > 300 ? 'color:#f59e0b' : 'color:#64748b';
+  return `<span title="Høyeste TTL på tvers av resolvers" style="${cls}">⏱ Etter endring: vent opptil ${label}</span>`;
+}
+
 function resolverRow(r, expected, label) {
   const matched = isMatch(r, expected);
   const cls = r.status === 'pending' ? 'pending' : (r.value ? (expected ? (matched ? 'match' : 'mismatch') : '') : 'pending');
@@ -404,6 +415,7 @@ function renderMonitors() {
             ${m.expected ? `<span>Forventer: <b style="color:#94a3b8">${m.expected}</b></span>` : '<span>Overvåker endringer</span>'}
             ${m.checkCount > 0 ? `<span>Sjekket ${m.checkCount}×</span>` : ''}
             ${lastStr ? `<span>Sist: ${lastStr}</span>` : ''}
+            ${ttlWaitLabel(m)}
           </div>
         </div>
         <button class="remove-btn" onclick="removeMonitor(${m.id})" title="Fjern">✕</button>
@@ -616,15 +628,31 @@ function importMonitors(event) {
       const parsed = JSON.parse(e.target.result);
       const list = parsed.monitors || (Array.isArray(parsed) ? parsed : null);
       if (!list) throw new Error('Ugyldig format');
-      let added = 0, skipped = 0;
+      let added = 0, reset = 0, skipped = 0;
       list.forEach(d => {
         if (!d.domain) { skipped++; return; }
         const exists = monitors.find(m => m.domain === d.domain && m.type === (d.type || 'A'));
-        if (exists) { skipped++; return; }
-        addMonitor(d.domain, d.expected || '', d.type || 'A', true);
-        added++;
+        if (exists) {
+          // Tilbakestill done-status så den overvåkes aktivt igjen
+          exists.done = false;
+          exists.propagatedAt = null;
+          exists.cf.status = 'pending';
+          exists.google.status = 'pending';
+          exists.http.status = 'pending';
+          exists.checkCount = 0;
+          reset++;
+        } else {
+          addMonitor(d.domain, d.expected || '', d.type || 'A', true);
+          added++;
+        }
       });
-      log('ok', `Import: ${added} lagt til${skipped ? ', ' + skipped + ' hoppet over (duplikat/ugyldig)' : ''}.`);
+      saveToStorage();
+      renderMonitors();
+      const parts = [];
+      if (added > 0) parts.push(`${added} lagt til`);
+      if (reset > 0) parts.push(`${reset} tilbakestilt`);
+      if (skipped > 0) parts.push(`${skipped} hoppet over`);
+      log('ok', `Import: ${parts.join(', ')}.`);
       if (!timer && monitors.length > 0 && !paused) startPolling();
     } catch(err) {
       log('fail', `Import feilet: ${err.message}`);

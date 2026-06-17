@@ -62,6 +62,11 @@ MIT
 
 ## Changelog
 
+### v1.6
+- TTL wait indicator per domain — shows "Etter endring: vent opptil X" based on current TTL
+- Color-coded: red (>30 min), yellow (5–30 min), grey (<5 min)
+- Helps plan when to expect propagation after a DNS change
+
 ### v1.5
 - HTTP/HTTPS reachability check for A and CNAME records
 - Detects SSL errors (HTTPS fails but HTTP responds) — common Azure issue
