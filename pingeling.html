@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pingeling</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f1117; color: #e2e8f0; min-height: 100vh; padding: 32px 16px; max-width: 820px; margin: 0 auto; }
+  .logo-wrap { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+  h1 { font-size: 1.7rem; font-weight: 700; color: #fff; margin: 0; letter-spacing: -0.02em; }
+  h1 span { color: #4f6ef7; }
+  .subtitle { color: #64748b; font-size: 0.85rem; margin-bottom: 28px; }
+  .card { background: #1e2330; border: 1px solid #2d3448; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+  .form-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  input, select { background: #141824; border: 1px solid #2d3448; color: #e2e8f0; border-radius: 8px; padding: 9px 13px; font-size: 0.9rem; outline: none; }
+  input:focus, select:focus { border-color: #4f6ef7; }
+  input.domain { flex: 2; min-width: 180px; }
+  input.ip { flex: 1.5; min-width: 130px; }
+  select.type-sel { width: 90px; flex-shrink: 0; }
+  .btn { border: none; border-radius: 8px; padding: 9px 18px; font-size: 0.9rem; font-weight: 500; cursor: pointer; transition: opacity 0.15s; white-space: nowrap; }
+  .btn:hover { opacity: 0.85; }
+  .btn-primary { background: #4f6ef7; color: #fff; }
+  .btn-ghost { background: #2d3448; color: #94a3b8; }
+  .btn-sm { padding: 6px 12px; font-size: 0.8rem; }
+  .interval-row { display: flex; align-items: center; gap: 8px; color: #64748b; font-size: 0.85rem; flex-wrap: wrap; }
+  .section-title { font-size: 0.8rem; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
+
+  /* Monitor items */
+  .monitor-item { background: #141824; border: 1px solid #2d3448; border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; transition: border-color 0.3s; }
+  .monitor-item.done { border-color: #22c55e55; background: #0a1f12; }
+  .monitor-item.error { border-color: #ef444433; }
+  .monitor-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .status-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; background: #334155; }
+  .status-dot.checking { background: #f59e0b; animation: pulse 1s infinite; }
+  .status-dot.match { background: #22c55e; }
+  .status-dot.mismatch { background: #ef4444; }
+  .status-dot.partial { background: #f59e0b; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+  .monitor-domain-line { flex: 1; min-width: 0; }
+  .monitor-domain { font-weight: 500; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .record-badge { font-size: 0.7rem; color: #475569; background: #1e2330; border: 1px solid #2d3448; border-radius: 4px; padding: 1px 5px; margin-left: 5px; vertical-align: middle; }
+  .badge-propagated { display: inline-block; font-size: 0.7rem; font-weight: 600; padding: 2px 8px; border-radius: 99px; margin-left: 6px; vertical-align: middle; background: #22c55e1a; color: #22c55e; border: 1px solid #22c55e33; }
+  .monitor-meta { color: #475569; font-size: 0.75rem; margin-top: 2px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .remove-btn { background: none; border: none; color: #334155; cursor: pointer; font-size: 1rem; padding: 2px 6px; border-radius: 4px; flex-shrink: 0; }
+  .remove-btn:hover { color: #ef4444; }
+
+  /* Resolver rows */
+  .resolver-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; overflow: hidden; min-width: 0; }
+  .resolver-row { background: #1a1f2e; border: 1px solid #252d3d; border-radius: 7px; padding: 9px 12px; display: flex; align-items: center; gap: 8px; overflow: hidden; min-width: 0; }
+  .resolver-row.match { border-color: #22c55e33; }
+  .resolver-row.mismatch { border-color: #ef444433; }
+  .resolver-label { font-size: 0.72rem; font-weight: 600; color: #475569; width: 72px; flex-shrink: 0; }
+  .resolver-value { font-family: monospace; font-size: 0.82rem; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .resolver-value.match { color: #22c55e; }
+  .resolver-value.mismatch { color: #ef4444; }
+  .resolver-value.pending { color: #334155; }
+  .ttl-badge { font-size: 0.68rem; color: #475569; background: #1e2330; border: 1px solid #2d3448; border-radius: 4px; padding: 1px 5px; white-space: nowrap; flex-shrink: 0; }
+  .ttl-badge.low { color: #f59e0b; border-color: #f59e0b33; }
+
+  /* CAA status */
+  .caa-row { margin-top: 8px; background: #1a1f2e; border: 1px solid #252d3d; border-radius: 7px; padding: 8px 12px; display: flex; align-items: center; gap: 10px; font-size: 0.78rem; }
+  .caa-row.ok    { border-color: #22c55e33; }
+  .caa-row.warn  { border-color: #f59e0b44; }
+  .caa-row.error { border-color: #ef444433; }
+  .caa-label { font-weight: 600; color: #475569; font-size: 0.72rem; width: 36px; flex-shrink: 0; }
+  .caa-status { flex: 1; min-width: 0; }
+  .caa-status.ok    { color: #22c55e; }
+  .caa-status.warn  { color: #f59e0b; }
+  .caa-status.error { color: #ef4444; }
+  .caa-status.muted { color: #475569; }
+  .caa-records { font-family: monospace; font-size: 0.75rem; color: #64748b; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .progress-bar-wrap { height: 3px; background: #2d3448; border-radius: 99px; margin-top: 8px; overflow: hidden; }
+  .progress-bar { height: 100%; background: #4f6ef7; border-radius: 99px; }
+  .notif-banner { background: #0a1f12; border: 1px solid #22c55e44; border-radius: 8px; padding: 10px 14px; color: #22c55e; font-size: 0.85rem; margin-bottom: 12px; display: none; }
+  .empty-state { text-align: center; color: #2d3448; padding: 36px; font-size: 0.85rem; }
+  .log { background: #141824; border: 1px solid #2d3448; border-radius: 10px; padding: 14px; font-family: monospace; font-size: 0.78rem; color: #64748b; max-height: 160px; overflow-y: auto; }
+  .log-entry { margin-bottom: 3px; line-height: 1.5; }
+  .log-entry .t { color: #2d3448; }
+  .log-entry .ok { color: #22c55e; }
+  .log-entry .fail { color: #ef4444; }
+  .log-entry .info { color: #4f6ef7; }
+  .log-entry .warn { color: #f59e0b; }
+
+  @media (max-width: 520px) {
+    .resolver-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="logo-wrap">
+  <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect width="52" height="52" rx="14" fill="#1a1f2e"/>
+    <!-- Ping rings -->
+    <circle cx="26" cy="26" r="20" stroke="#4f6ef7" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.2"/>
+    <circle cx="26" cy="26" r="14" stroke="#4f6ef7" stroke-width="1.5" opacity="0.35"/>
+    <circle cx="26" cy="26" r="8"  stroke="#4f6ef7" stroke-width="2"   opacity="0.65"/>
+    <!-- Center node -->
+    <circle cx="26" cy="26" r="4" fill="#4f6ef7"/>
+    <circle cx="26" cy="26" r="2" fill="#fff" opacity="0.9"/>
+    <!-- Animated pulse ring -->
+    <circle cx="26" cy="26" r="8" stroke="#22c55e" stroke-width="1.5" opacity="0">
+      <animate attributeName="r" values="8;22" dur="2s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.7;0" dur="2s" repeatCount="indefinite"/>
+    </circle>
+    <!-- Small tick mark top-right -->
+    <circle cx="39" cy="13" r="7" fill="#22c55e"/>
+    <polyline points="36,13 38.2,15.5 42,11" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </svg>
+  <div>
+    <h1>Ping<span>eling</span></h1>
+    <p class="subtitle" style="margin-bottom:0">DNS-propagering og CAA-sjekk — Cloudflare &amp; Google</p>
+  </div>
+</div>
+<div style="margin-bottom:24px"></div>
+
+<div class="card">
+  <div class="section-title">Legg til domene</div>
+  <div class="form-row">
+    <input class="domain" id="inp-domain" type="text" placeholder="eksempel.no" autocomplete="off" spellcheck="false">
+    <input class="ip" id="inp-ip" type="text" placeholder="Forventet verdi (valgfritt)" autocomplete="off" spellcheck="false">
+    <select class="type-sel" id="inp-type">
+      <option value="A">A</option>
+      <option value="AAAA">AAAA</option>
+      <option value="CNAME">CNAME</option>
+      <option value="MX">MX</option>
+      <option value="TXT">TXT</option>
+    </select>
+    <button class="btn btn-primary" onclick="addMonitor()">+ Legg til</button>
+  </div>
+  <div class="interval-row">
+    <span>Sjekk hvert</span>
+    <select id="sel-interval" style="width:90px">
+      <option value="5">5 sek</option>
+      <option value="10">10 sek</option>
+      <option value="30" selected>30 sek</option>
+      <option value="60">1 min</option>
+      <option value="120">2 min</option>
+      <option value="300">5 min</option>
+    </select>
+    <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="btn btn-ghost btn-sm" onclick="exportMonitors()" title="Eksporter til JSON-fil">⬇ Eksport</button>
+      <label class="btn btn-ghost btn-sm" style="cursor:pointer" title="Importer fra JSON-fil">⬆ Import<input type="file" accept=".json" style="display:none" onchange="importMonitors(event)"></label>
+      <button class="btn btn-ghost btn-sm" onclick="toggleNotifications()" id="btn-notif" title="Skru på desktop-varsler">🔔 Varsler</button>
+      <button class="btn btn-ghost btn-sm" onclick="pauseAll()" id="btn-pause">⏸ Pause</button>
+      <button class="btn btn-ghost btn-sm" onclick="clearAll()">🗑 Fjern alle</button>
+    </div>
+  </div>
+  <div class="progress-bar-wrap" id="progress-wrap" style="display:none">
+    <div class="progress-bar" id="progress-bar" style="width:100%; transition:none;"></div>
+  </div>
+</div>
+
+<div id="notif-banner" class="notif-banner"></div>
+
+<div class="card">
+  <div class="section-title">Overvåkede domener</div>
+  <div id="monitors"><div class="empty-state">Ingen domener lagt til ennå.</div></div>
+</div>
+
+<div class="card">
+  <div class="section-title">Logg</div>
+  <div class="log" id="log"><div class="log-entry"><span class="info">Klar — legg til et domene for å starte.</span></div></div>
+</div>
+
+<script>
+const monitors = [];
+let timer = null;
+let paused = false;
+let progressTimer = null;
+
+// ── DNS lookup ────────────────────────────────────────────────
+async function lookupDNS(domain, type, provider) {
+  const url = provider === 'google'
+    ? `https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=${type}`
+    : `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=${type}`;
+  const res = await fetch(url, { headers: { 'Accept': 'application/dns-json' } });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  if (!data.Answer || data.Answer.length === 0) return { value: null, ttl: null };
+  const ttl = Math.min(...data.Answer.map(a => a.TTL));
+  return { value: data.Answer.map(a => a.data).join(', '), ttl };
+}
+
+// CAA: hent rotdomene (f.eks. sub.example.no → example.no)
+function rootDomain(domain) {
+  const parts = domain.split('.');
+  return parts.length > 2 ? parts.slice(-2).join('.') : domain;
+}
+
+async function lookupCAA(domain) {
+  // Sjekk eksakt domene, deretter rotdomene
+  const targets = [domain];
+  const root = rootDomain(domain);
+  if (root !== domain) targets.push(root);
+
+  for (const target of targets) {
+    try {
+      const url = `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(target)}&type=CAA`;
+      const res = await fetch(url, { headers: { 'Accept': 'application/dns-json' } });
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (data.Answer && data.Answer.length > 0) {
+        return { records: data.Answer.map(a => a.data), checkedAt: target };
+      }
+    } catch(e) {}
+  }
+  return { records: [], checkedAt: domain };
+}
+
+// Azure App Service bruker DigiCert. Sjekk også Let's Encrypt for info.
+const AZURE_CAS = ['digicert.com'];
+
+function caaAzureStatus(records) {
+  if (!records || records.length === 0) return { status: 'open', label: 'Ingen CAA-record — alle CA-er tillatt' };
+  const issueRecords = records.filter(r => /\bissue\b|\bissuewild\b/i.test(r));
+  if (issueRecords.length === 0) return { status: 'open', label: 'Ingen issue-regler funnet' };
+  const hasDigiCert = issueRecords.some(r => r.toLowerCase().includes('digicert.com'));
+  const summary = issueRecords.map(r => r.replace(/^0\s+issue\w*\s+/i, '').replace(/"/g, '')).join(', ');
+  if (hasDigiCert) return { status: 'ok', label: '✓ DigiCert tillatt — Azure kan utstede sertifikat', records: summary };
+  return { status: 'error', label: '✗ DigiCert IKKE tillatt — Azure kan IKKE utstede sertifikat!', records: summary };
+}
+
+// ── Persistence ───────────────────────────────────────────────
+function saveToStorage() {
+  try {
+    const data = monitors.map(m => ({ domain: m.domain, expected: m.expected, type: m.type, done: m.done, propagatedAt: m.propagatedAt }));
+    localStorage.setItem('dns-monitor-v2', JSON.stringify(data));
+  } catch(e) {}
+}
+
+function loadFromStorage() {
+  try {
+    const data = JSON.parse(localStorage.getItem('dns-monitor-v2') || '[]');
+    data.forEach(d => addMonitor(d.domain, d.expected, d.type, true, d.done, d.propagatedAt));
+  } catch(e) {}
+}
+
+// ── Monitor management ────────────────────────────────────────
+function addMonitor(domain, expected, type, silent, done, propagatedAt) {
+  if (!domain) {
+    domain = document.getElementById('inp-domain').value.trim().replace(/^https?:\/\//, '').split('/')[0];
+    expected = document.getElementById('inp-ip').value.trim();
+    type = document.getElementById('inp-type').value;
+    if (!domain) { document.getElementById('inp-domain').focus(); return; }
+    document.getElementById('inp-domain').value = '';
+    document.getElementById('inp-ip').value = '';
+  }
+  const id = Date.now() + Math.random();
+  monitors.push({
+    id, domain, expected, type,
+    cf:     { value: null, ttl: null, status: 'pending' },
+    google: { value: null, ttl: null, status: 'pending' },
+    caa:    { records: null, status: 'pending', checkedAt: null },
+    lastChecked: null,
+    done: done || false,
+    propagatedAt: propagatedAt || null,
+    checkCount: 0
+  });
+  saveToStorage();
+  renderMonitors();
+  if (!silent) log('info', `Lagt til: ${domain} (${type})${expected ? ' → forventer ' + expected : ''}`);
+  if (!timer && !paused) startPolling();
+}
+
+function removeMonitor(id) {
+  const idx = monitors.findIndex(m => m.id === id);
+  if (idx !== -1) monitors.splice(idx, 1);
+  saveToStorage();
+  renderMonitors();
+  if (monitors.length === 0) stopPolling();
+}
+
+// ── Render ────────────────────────────────────────────────────
+function isMatch(resolver, expected) {
+  if (!resolver.value || !expected) return false;
+  return resolver.value.toLowerCase().includes(expected.toLowerCase());
+}
+
+function overallDotClass(m) {
+  const cfM = isMatch(m.cf, m.expected);
+  const gM  = isMatch(m.google, m.expected);
+  if (!m.expected) {
+    if (m.cf.status === 'checking' || m.google.status === 'checking') return 'checking';
+    return m.cf.value ? 'match' : '';
+  }
+  if (m.done) return 'match';
+  if (m.cf.status === 'checking' || m.google.status === 'checking') return 'checking';
+  if (cfM && gM) return 'match';
+  if (cfM || gM) return 'partial';
+  if (m.cf.value || m.google.value) return 'mismatch';
+  return 'checking';
+}
+
+function ttlLabel(ttl) {
+  if (ttl === null) return '';
+  const cls = ttl < 60 ? ' low' : '';
+  const label = ttl >= 3600 ? `${Math.round(ttl/3600)}t` : ttl >= 60 ? `${Math.round(ttl/60)}m` : `${ttl}s`;
+  return `<span class="ttl-badge${cls}">TTL ${label}</span>`;
+}
+
+function resolverRow(r, expected, label) {
+  const matched = isMatch(r, expected);
+  const cls = r.status === 'pending' ? 'pending' : (r.value ? (expected ? (matched ? 'match' : 'mismatch') : '') : 'pending');
+  const rowCls = r.value && expected ? (matched ? 'match' : 'mismatch') : '';
+  const display = r.status === 'checking' ? '...' : (r.value || (r.status === 'error' ? '⚠ feil' : '—'));
+  return `<div class="resolver-row ${rowCls}">
+    <span class="resolver-label">${label}</span>
+    <span class="resolver-value ${cls}" title="${r.value || ''}">${display}</span>
+    ${r.ttl !== null ? ttlLabel(r.ttl) : ''}
+  </div>`;
+}
+
+function renderCAARow(m) {
+  const c = m.caa;
+  if (c.status === 'pending') return `<div class="caa-row"><span class="caa-label">CAA</span><span class="caa-status muted">Venter...</span></div>`;
+  if (c.status === 'checking') return `<div class="caa-row"><span class="caa-label">CAA</span><span class="caa-status muted">Sjekker...</span></div>`;
+  if (c.status === 'error') return `<div class="caa-row error"><span class="caa-label">CAA</span><span class="caa-status error">Feil ved oppslag</span></div>`;
+  const s = caaAzureStatus(c.records);
+  const checkedNote = c.checkedAt ? ` <span style="color:#334155;font-size:0.7rem;">(sjekket på ${c.checkedAt})</span>` : '';
+  return `<div class="caa-row ${s.status === 'open' ? '' : s.status}">
+    <span class="caa-label">CAA</span>
+    <span class="caa-status ${s.status === 'open' ? 'muted' : s.status}">${s.label}${checkedNote}</span>
+    ${s.records ? `<div class="caa-records" title="${s.records}">${s.records}</div>` : ''}
+  </div>`;
+}
+
+function renderMonitors() {
+  const el = document.getElementById('monitors');
+  if (monitors.length === 0) { el.innerHTML = '<div class="empty-state">Ingen domener lagt til ennå.</div>'; return; }
+
+  monitors.forEach(m => {
+    let item = el.querySelector(`[data-id="${m.id}"]`);
+    if (!item) { item = document.createElement('div'); item.dataset.id = m.id; el.appendChild(item); }
+
+    const dot = overallDotClass(m);
+    const propagatedStr = m.propagatedAt ? new Date(m.propagatedAt).toLocaleTimeString('no') : null;
+    const lastStr = m.lastChecked ? new Date(m.lastChecked).toLocaleTimeString('no') : null;
+
+    item.className = `monitor-item${m.done ? ' done' : ''}`;
+    item.innerHTML = `
+      <div class="monitor-header">
+        <div class="status-dot ${dot}"></div>
+        <div class="monitor-domain-line">
+          <div class="monitor-domain">
+            ${m.domain}<span class="record-badge">${m.type}</span>
+            ${m.done && propagatedStr ? `<span class="badge-propagated">✓ Propagert ${propagatedStr}</span>` : ''}
+          </div>
+          <div class="monitor-meta">
+            ${m.expected ? `<span>Forventer: <b style="color:#94a3b8">${m.expected}</b></span>` : '<span>Overvåker endringer</span>'}
+            ${m.checkCount > 0 ? `<span>Sjekket ${m.checkCount}×</span>` : ''}
+            ${lastStr ? `<span>Sist: ${lastStr}</span>` : ''}
+          </div>
+        </div>
+        <button class="remove-btn" onclick="removeMonitor(${m.id})" title="Fjern">✕</button>
+      </div>
+      <div class="resolver-grid">
+        ${resolverRow(m.cf,     m.expected, '☁ Cloudflare')}
+        ${resolverRow(m.google, m.expected, '🔍 Google')}
+      </div>
+      ${renderCAARow(m)}
+    `;
+  });
+
+  // Remove stale DOM items
+  [...el.querySelectorAll('.monitor-item')].forEach(item => {
+    if (!monitors.find(m => m.id == item.dataset.id)) item.remove();
+  });
+}
+
+// ── Polling ───────────────────────────────────────────────────
+async function checkAll() {
+  for (const m of monitors) {
+    if (m.done) continue;
+    m.cf.status = 'checking';
+    m.google.status = 'checking';
+    // CAA: sjekk første gang, eller re-sjekk hvert 5. minutt
+    const caaStale = !m.caa.lastChecked || (Date.now() - m.caa.lastChecked > 5 * 60 * 1000);
+    if (caaStale) m.caa.status = 'checking';
+    renderMonitors();
+
+    const jobs = [
+      lookupDNS(m.domain, m.type, 'cloudflare').then(r => {
+        m.cf.value = r.value || (r.value === null ? 'NXDOMAIN' : null);
+        m.cf.ttl   = r.ttl;
+        m.cf.status = 'done';
+      }).catch(e => { m.cf.value = null; m.cf.status = 'error'; log('fail', `CF ${m.domain}: ${e.message}`); }),
+
+      lookupDNS(m.domain, m.type, 'google').then(r => {
+        m.google.value = r.value || (r.value === null ? 'NXDOMAIN' : null);
+        m.google.ttl   = r.ttl;
+        m.google.status = 'done';
+      }).catch(e => { m.google.value = null; m.google.status = 'error'; log('fail', `Google ${m.domain}: ${e.message}`); })
+    ];
+
+    if (caaStale) {
+      jobs.push(
+        lookupCAA(m.domain).then(r => {
+          m.caa.records   = r.records;
+          m.caa.checkedAt = r.checkedAt;
+          m.caa.status    = 'done';
+          m.caa.lastChecked = Date.now();
+          const s = caaAzureStatus(r.records);
+          if (s.status === 'error') log('warn', `CAA ⚠ ${m.domain}: ${s.label}`);
+          else if (s.status === 'ok') log('ok', `CAA ✓ ${m.domain}: DigiCert tillatt`);
+          else log('info', `CAA ${m.domain}: ingen regler satt`);
+        }).catch(e => { m.caa.status = 'error'; m.caa.lastChecked = Date.now(); })
+      );
+    }
+
+    await Promise.all(jobs);
+
+    m.checkCount++;
+    m.lastChecked = Date.now();
+
+    const cfM = isMatch(m.cf, m.expected);
+    const gM  = isMatch(m.google, m.expected);
+
+    if (m.expected) {
+      const cfStr = `CF:${m.cf.value}${m.cf.ttl !== null ? ` TTL:${m.cf.ttl}s` : ''}`;
+      const gStr  = `Google:${m.google.value}${m.google.ttl !== null ? ` TTL:${m.google.ttl}s` : ''}`;
+      log(cfM && gM ? 'ok' : (cfM || gM ? 'warn' : 'fail'),
+        `${m.domain} — ${cfStr} | ${gStr}${cfM && gM ? ' ✓ begge match' : cfM ? ' ~ CF match' : gM ? ' ~ Google match' : ''}`);
+    } else {
+      log('info', `${m.domain} — CF:${m.cf.value||'—'} | Google:${m.google.value||'—'}`);
+    }
+
+    if (m.expected && cfM && gM && !m.done) {
+      m.done = true;
+      m.propagatedAt = Date.now();
+      notify(m.domain, m.cf.value);
+    }
+
+    renderMonitors();
+  }
+}
+
+function startPolling() {
+  if (timer) clearInterval(timer);
+  const interval = parseInt(document.getElementById('sel-interval').value) * 1000;
+  checkAll();
+  timer = setInterval(() => { if (!paused) checkAll(); }, interval);
+  startProgressBar(interval);
+  document.getElementById('progress-wrap').style.display = 'block';
+}
+
+function stopPolling() {
+  clearInterval(timer); clearInterval(progressTimer); timer = null;
+  document.getElementById('progress-wrap').style.display = 'none';
+}
+
+function startProgressBar(intervalMs) {
+  clearInterval(progressTimer);
+  const bar = document.getElementById('progress-bar');
+  const secs = intervalMs / 1000;
+  let elapsed = 0;
+  bar.style.transition = 'none'; bar.style.width = '100%';
+  progressTimer = setInterval(() => {
+    elapsed++;
+    bar.style.transition = 'width 1s linear';
+    bar.style.width = Math.max(0, 100 - (elapsed / secs * 100)) + '%';
+    if (elapsed >= secs) { elapsed = 0; bar.style.transition = 'none'; bar.style.width = '100%'; }
+  }, 1000);
+}
+
+function pauseAll() {
+  paused = !paused;
+  document.getElementById('btn-pause').textContent = paused ? '▶ Fortsett' : '⏸ Pause';
+  log('info', paused ? 'Polling pauset.' : 'Polling gjenopptatt.');
+}
+
+function clearAll() {
+  monitors.length = 0; stopPolling(); saveToStorage(); renderMonitors();
+  log('info', 'Alle domener fjernet.');
+}
+
+// ── Notify ────────────────────────────────────────────────────
+function notify(domain, ip) {
+  const banner = document.getElementById('notif-banner');
+  banner.style.display = 'block';
+  banner.textContent = `✅ ${domain} peker nå på ${ip} — DNS er propagert på begge resolvers!`;
+  if (Notification.permission === 'granted') {
+    new Notification('DNS propagert!', { body: `${domain} → ${ip}` });
+  }
+  try {
+    const ctx = new AudioContext();
+    [0, 0.15, 0.3].forEach((delay, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = [660, 784, 1047][i];
+      gain.gain.setValueAtTime(0.25, ctx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.25);
+      osc.start(ctx.currentTime + delay);
+      osc.stop(ctx.currentTime + delay + 0.25);
+    });
+  } catch(e) {}
+}
+
+// ── Log ───────────────────────────────────────────────────────
+function log(type, msg) {
+  const logEl = document.getElementById('log');
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML = `<span class="t">[${new Date().toLocaleTimeString('no')}]</span> <span class="${type}">${msg}</span>`;
+  logEl.appendChild(entry);
+  logEl.scrollTop = logEl.scrollHeight;
+  while (logEl.children.length > 300) logEl.removeChild(logEl.firstChild);
+}
+
+// ── Export / Import ───────────────────────────────────────────
+function exportMonitors() {
+  const data = monitors.map(m => ({ domain: m.domain, expected: m.expected, type: m.type }));
+  if (data.length === 0) { log('warn', 'Ingen domener å eksportere.'); return; }
+  const json = JSON.stringify({ pingeling: true, version: 1, exported: new Date().toISOString(), monitors: data }, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `pingeling-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  log('ok', `Eksporterte ${data.length} domene(r) til JSON.`);
+}
+
+function importMonitors(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      const list = parsed.monitors || (Array.isArray(parsed) ? parsed : null);
+      if (!list) throw new Error('Ugyldig format');
+      let added = 0, skipped = 0;
+      list.forEach(d => {
+        if (!d.domain) { skipped++; return; }
+        const exists = monitors.find(m => m.domain === d.domain && m.type === (d.type || 'A'));
+        if (exists) { skipped++; return; }
+        addMonitor(d.domain, d.expected || '', d.type || 'A', true);
+        added++;
+      });
+      log('ok', `Import: ${added} lagt til${skipped ? ', ' + skipped + ' hoppet over (duplikat/ugyldig)' : ''}.`);
+      if (!timer && monitors.length > 0 && !paused) startPolling();
+    } catch(err) {
+      log('fail', `Import feilet: ${err.message}`);
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+// ── Notifications ─────────────────────────────────────────────
+function toggleNotifications() {
+  if (Notification.permission === 'granted') {
+    log('info', 'Desktop-varsler er allerede aktivert.');
+    return;
+  }
+  Notification.requestPermission().then(p => {
+    if (p === 'granted') {
+      updateNotifButton();
+      log('ok', 'Desktop-varsler aktivert!');
+    } else {
+      log('warn', 'Varsler ble ikke tillatt.');
+    }
+  });
+}
+
+function updateNotifButton() {
+  const btn = document.getElementById('btn-notif');
+  if (!btn) return;
+  if (Notification.permission === 'granted') {
+    btn.textContent = '🔔 Varsler på';
+    btn.style.color = '#22c55e';
+  } else {
+    btn.textContent = '🔔 Varsler';
+    btn.style.color = '';
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────
+updateNotifButton();
+document.getElementById('inp-domain').addEventListener('keydown', e => { if(e.key==='Enter') addMonitor(); });
+document.getElementById('inp-ip').addEventListener('keydown',     e => { if(e.key==='Enter') addMonitor(); });
+document.getElementById('sel-interval').addEventListener('change', () => { if(monitors.length > 0 && !paused) startPolling(); });
+loadFromStorage();
+</script>
+</body>
+</html>
